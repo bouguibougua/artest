@@ -3,7 +3,8 @@
   const $ = id => document.getElementById(id);
   const THREE = AFRAME.THREE;
   const W = 1616, H = 1540; // Taille exacte de assets/image-reference.png
-  const IMAGE_PLANE_ROTATION = 0; // X vers la droite, Y vers le haut, Z vers l'avant
+  let pixelToMarkerUnit = 25.4/72; // AR.js exprime les dimensions NFT en millimètres.
+  const AR_IMAGE_ROTATION_X = -Math.PI/2; // Convertit le plan de dessin XY vers le plan NFT XZ d'AR.js.
   const marker = $('marker');
   const scene = document.querySelector('a-scene');
   const walkerMaterial = new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide});
@@ -30,7 +31,8 @@
   const FOOT_CLEARANCE = 11;
   const STAIR_DEPTH = 80;
   const STAIR_DEPTH_CENTER = STAIR_DEPTH/2;
-  const WALKER_SCALE = 7.2;
+  const WALKER_SCALE = 1.3;
+  const WALKER_GEOMETRY_SCALE = 5.6;
   const lengths = route.slice(1).map((p,i)=>Math.hypot(p[0]-route[i][0],p[1]-route[i][1]));
   const total = lengths.reduce((a,b)=>a+b,0);
   function log(msg){ $('status').textContent=msg; console.log('[AR escalier]',msg); $('log').textContent += msg+'\n'; }
@@ -53,15 +55,17 @@
     return stairs;
   }
   function createWalker(parent){
-    // Dessiné dans le plan XY du NFT, devant les marches (+Z).
+    // Le dessin est construit en XY, puis converti avec son groupe parent vers le plan XZ du NFT.
     const root = new THREE.Group(); parent.add(root);
-    addBall(root,11,0,108,0); // tête blanche
-    addBall(root,3,10,108,0); // regarde vers la droite de l'image
-    addBox(root,40,49,17,0,66,0); // torse blanc
+    const figure = new THREE.Group(); root.add(figure);
+    figure.scale.setScalar(WALKER_GEOMETRY_SCALE);
+    addBall(figure,11,0,108,0); // tête blanche
+    addBall(figure,3,10,108,0); // regarde vers la droite de l'image
+    addBox(figure,40,49,17,0,66,0); // torse blanc
     for(const side of [-1,1]){
-      const arm = new THREE.Group(); arm.position.set(side*15,83,0); root.add(arm);
+      const arm = new THREE.Group(); arm.position.set(side*15,83,0); figure.add(arm);
       addBox(arm,9,42,10,0,-21,0);
-      const leg = new THREE.Group(); leg.position.set(side*8,38,0); root.add(leg);
+      const leg = new THREE.Group(); leg.position.set(side*8,38,0); figure.add(leg);
       addBox(leg,10,38,12,0,-19,0);
       addBox(leg,20,8,14,side*4,-37,3);
       if(side===-1){leftArm=arm;leftLeg=leg;}else{rightArm=arm;rightLeg=leg;}
@@ -140,8 +144,12 @@
       );
       sceneRoot.scale.setScalar(previewScale);
     }else{
-      sceneRoot.position.set(Number($('dx').value),Number($('dy').value),0);
-      sceneRoot.scale.setScalar(scale);
+      sceneRoot.position.set(
+        Number($('dx').value)*pixelToMarkerUnit,
+        0,
+        -Number($('dy').value)*pixelToMarkerUnit
+      );
+      sceneRoot.scale.setScalar(scale*pixelToMarkerUnit);
     }
     const walking=(tracked || preview) && !paused && !finished;
     if(walking){
@@ -189,7 +197,7 @@
   }
   function init(){
     sceneRoot=new THREE.Group();marker.object3D.add(sceneRoot);
-    sceneRoot.rotation.set(0,0,IMAGE_PLANE_ROTATION);
+    sceneRoot.rotation.set(AR_IMAGE_ROTATION_X,0,0);
     createStaircase(sceneRoot);walker=createWalker(sceneRoot);
     sceneRoot.visible=false;
     $('restart').onclick=()=>{
@@ -204,12 +212,14 @@
       if(preview.checked){
         distance=0;finished=false;loopPause=0;paused=false;
         scene.object3D.add(sceneRoot);
+        sceneRoot.rotation.set(0,0,0);
         $('pause').textContent='Pause';
         $('animation').textContent='Arrêter animation';
         $('animation').setAttribute('aria-pressed','true');
         log('Aperçu de l’animation lancé');
       }else{
         marker.object3D.add(sceneRoot);
+        sceneRoot.rotation.set(AR_IMAGE_ROTATION_X,0,0);
         $('animation').textContent='Animation';
         $('animation').setAttribute('aria-pressed','false');
         log(tracked?'Aperçu arrêté : suivi AR actif':'Aperçu de l’animation arrêté');
@@ -218,6 +228,7 @@
     $('preview').addEventListener('change',()=>{
       const preview=$('preview').checked;
       (preview?scene.object3D:marker.object3D).add(sceneRoot);
+      sceneRoot.rotation.set(preview?0:AR_IMAGE_ROTATION_X,0,0);
       $('animation').textContent=preview?'Arrêter animation':'Animation';
       $('animation').setAttribute('aria-pressed',String(preview));
     });
@@ -233,6 +244,7 @@
       if($('preview').checked){
         $('preview').checked=false;
         marker.object3D.add(sceneRoot);
+        sceneRoot.rotation.set(AR_IMAGE_ROTATION_X,0,0);
         $('animation').textContent='Animation';
         $('animation').setAttribute('aria-pressed','false');
       }
@@ -247,6 +259,10 @@
         : 'Image perdue : en attente de détection');
     });
     marker.addEventListener('arjs-nft-loaded',()=>log('NFT chargé : filme l’image des escaliers'));
+    window.addEventListener('arjs-nft-init-data',event=>{
+      const dpi=Number(event.detail?.dpi);
+      if(Number.isFinite(dpi)&&dpi>0)pixelToMarkerUnit=25.4/dpi;
+    });
     window.addEventListener('error',e=>log('Erreur : '+e.message));
     requestAnimationFrame(render);
   }
