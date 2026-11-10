@@ -7,7 +7,8 @@ Cette version réutilise les **trois fichiers NFT originaux fournis**, renommés
 2. Ouvrir `http://localhost:8000` sur l’ordinateur, ou publier sur GitHub Pages pour tester sur smartphone (HTTPS requis).
 3. Autoriser la caméra. Montrer l'image **image-reference.png**, entière, depuis un autre écran ou imprimée, bien éclairée.
 4. Cliquer **Diagnostic** : vérifier que les trois fichiers indiquent OK. Si aucun événement `Image reconnue` n'arrive malgré cela, le problème est vraisemblablement la qualité des descripteurs ou le manque de détails de l'image.
-5. Le tracé et le personnage sont une **première approximation** à calibrer après détection. Utiliser les curseurs pour ajuster.
+5. Après détection, l'illustration `assets/archer.png` apparaît en haut à gauche de la scène AR, pendant que le personnage continue son parcours. Garder l'image de référence visible pour maintenir le suivi.
+6. Le tracé et le personnage sont une **première approximation** à calibrer après détection. Utiliser les curseurs pour ajuster.
 
 ## Important
 Le dessin à grandes zones uniformes peut être difficile pour le suivi NFT. Si le suivi échoue, créer un **marqueur .patt avec bordure** (méthode différente), ou une nouvelle image plus riche en détails puis régénérer les trois descripteurs.
