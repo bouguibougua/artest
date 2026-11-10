@@ -4,6 +4,7 @@
   const $ = id => document.getElementById(id);
   const marker = $('marker');
   const plane = $('image-plane');
+  const scene = document.querySelector('a-scene');
   const status = $('status');
   const details = $('details');
   const log = $('log');
@@ -30,6 +31,8 @@
   let eyes = [];
   let guide = null;
   let artwork = null;
+  let previewAnchor = null;
+  let previewMode = false;
   let lastFrame = 0;
   let ready = false;
   let lostTimer = null;
@@ -180,6 +183,15 @@
     );
   }
 
+  function previewCoords(point) {
+    const scale = 0.0013;
+    return new THREE.Vector3(
+      (point[0] - W / 2 + Number($('dx').value)) * scale,
+      (H / 2 - point[1] + Number($('dy').value)) * scale,
+      0
+    );
+  }
+
   function routeAt(distance) {
     let remaining = distance;
     for (let index = 0; index < lengths.length; index++) {
@@ -218,7 +230,7 @@
     requestAnimationFrame(tick);
     const delta = lastFrame ? Math.min((time - lastFrame) / 1000, 0.08) : 0;
     lastFrame = time;
-    const moving = detected && !paused && progress < totalLength;
+    const moving = (detected || previewMode) && !paused && progress < totalLength;
 
     if (moving) {
       progress = Math.min(totalLength, progress + delta * 160 * Number($('speed').value));
@@ -227,9 +239,17 @@
     if (!figure) return;
 
     const size = Number($('size').value);
-    figure.position.copy(coords(routeAt(progress)));
-    figure.position.y += 25 * size;
-    figure.scale.setScalar(size);
+    if (previewMode) {
+      const previewScale = size * 0.004;
+      figure.position.copy(previewCoords(routeAt(progress)));
+      figure.position.y += 34 * previewScale;
+      figure.position.z = 0;
+      figure.scale.setScalar(previewScale);
+    } else {
+      figure.position.copy(coords(routeAt(progress)));
+      figure.position.y += 25 * size;
+      figure.scale.setScalar(size);
+    }
 
     const cycle = time * 0.012 * Number($('speed').value);
     const stride = moving ? Math.sin(cycle) : 0;
@@ -249,24 +269,59 @@
 
   function init() {
     figure = makeFigure();
+    previewAnchor = new THREE.Group();
+    previewAnchor.position.set(0, -0.35, -3);
+    scene.object3D.add(previewAnchor);
+    previewAnchor.visible = false;
     $('restart').onclick = () => {
       progress = 0;
       paused = false;
       $('pause').textContent = 'Pause';
-      setStatus(detected ? 'Animation relancée' : 'Présente le dessin à la caméra');
+      setStatus(previewMode
+        ? 'Animation de test relancée.'
+        : detected ? 'Animation relancée' : 'Présente le dessin à la caméra');
     };
     $('pause').onclick = () => {
       paused = !paused;
       $('pause').textContent = paused ? 'Reprendre' : 'Pause';
+    };
+    $('animation').onclick = () => {
+      previewMode = !previewMode;
+      if (previewMode) {
+        progress = 0;
+        paused = false;
+        $('pause').textContent = 'Pause';
+        previewAnchor.add(figure);
+        previewAnchor.visible = true;
+        $('animation').textContent = 'Mode AR';
+        setStatus('Animation de test lancée : le bonhomme monte les marches.');
+      } else {
+        plane.object3D.add(figure);
+        previewAnchor.visible = false;
+        $('animation').textContent = 'Animation';
+        setStatus(detected
+          ? 'Mode AR : le bonhomme suit le marqueur.'
+          : 'Mode AR : présente le dessin à la caméra.');
+      }
     };
     $('debug').onclick = () => { $('panel').hidden = !$('panel').hidden; };
     for (const id of ['dx', 'dy', 'guide']) $(id).addEventListener('input', updateGuide);
 
     marker.addEventListener('markerFound', () => {
       clearTimeout(lostTimer);
+      if (!detected) {
+        progress = 0;
+        paused = false;
+        $('pause').textContent = 'Pause';
+      }
       detected = true;
+      if (previewMode) {
+        previewMode = false;
+        previewAnchor.visible = false;
+        plane.object3D.add(figure);
+        $('animation').textContent = 'Animation';
+      }
       if (artwork) artwork.visible = true;
-      if (progress >= totalLength) progress = 0;
       setStatus('Image reconnue ! L’illustration apparaît et le bonhomme monte.');
     });
     marker.addEventListener('markerLost', () => {
@@ -274,7 +329,7 @@
       lostTimer = setTimeout(() => {
         detected = false;
         if (artwork) artwork.visible = false;
-        setStatus('Image perdue : recadre le dessin.');
+        if (!previewMode) setStatus('Image perdue : recadre le dessin.');
       }, 900);
     });
     marker.addEventListener('arjs-nft-loaded', () => {
