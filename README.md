@@ -1,15 +1,20 @@
-# Escalier AR — version de diagnostic
+# Escalier blanc animé en réalité augmentée
 
-Cette version réutilise les **trois fichiers NFT originaux fournis**, renommés `escalier.fset`, `escalier.fset3`, `escalier.iset`. Ils ne sont pas recalculés : leur présence ne garantit pas que le dessin soit assez riche pour être reconnu.
+Ce projet utilise les trois fichiers NFT existants dans `assets/` et ne nécessite aucun `.glb`.
 
-## Test
-1. Ouvrir un terminal dans ce dossier : `python3 -m http.server 8000`.
-2. Ouvrir `http://localhost:8000` sur l’ordinateur, ou publier sur GitHub Pages pour tester sur smartphone (HTTPS requis).
-3. Autoriser la caméra. Montrer l'image **image-reference.png**, entière, depuis un autre écran ou imprimée, bien éclairée.
-4. Cliquer sur **Animation** pour lancer l'aperçu du bonhomme sans marqueur ; cliquer sur **Mode AR** pour revenir au suivi de l'image.
-5. Cliquer **Diagnostic** : vérifier que les trois fichiers indiquent OK. Si aucun événement `Image reconnue` n'arrive malgré cela, le problème est vraisemblablement la qualité des descripteurs ou le manque de détails de l'image.
-6. Après détection, l'illustration `assets/archer.png` apparaît en haut à gauche de la scène AR, pendant que le personnage continue son parcours. Garder l'image de référence visible pour maintenir le suivi.
-7. Le tracé et le personnage sont une **première approximation** à calibrer après détection. Utiliser les curseurs pour ajuster.
+- `index.html` : caméra AR.js, marqueur NFT et commandes.
+- `script.js` : escalier blanc en 3D et personnage blanc animé.
+- `style.css` : interface.
 
-## Important
-Le dessin à grandes zones uniformes peut être difficile pour le suivi NFT. Si le suivi échoue, créer un **marqueur .patt avec bordure** (méthode différente), ou une nouvelle image plus riche en détails puis régénérer les trois descripteurs.
+## Tester
+
+Depuis le dossier du projet : `python3 -m http.server 8000`, puis `http://localhost:8000` sur le même ordinateur. Sur téléphone, utiliser GitHub Pages en HTTPS (ou une configuration HTTPS locale). Afficher `assets/image-reference.png` sur un autre écran.
+
+## Réglages
+
+Le bouton « Réglages » permet de déplacer l'ensemble, de changer l'échelle et la vitesse. Le dessin des marches et le parcours sont définis dans `points` et `route` dans `script.js`. Si le personnage est mal aligné, ajuster ces coordonnées.
+
+La reconnaissance NFT dépend de l'image et des conditions d'éclairage. Le rendu n'a pas été testé sur un téléphone réel.
+
+## Nouveauté : sauts
+Le bonhomme est 28 % plus grand et saute en arc entre chaque palier. Réglages dans `script.js` : `WALKER_SCALE = 1.28` et `JUMP_HEIGHT = 95`. Les fichiers NFT sont inchangés.
