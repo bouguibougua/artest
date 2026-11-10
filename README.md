@@ -1,19 +1,13 @@
-# Projet AR Escalier
+# Escalier AR — version de diagnostic
 
-Application AR.js avec suivi d'image NFT et bonhomme 3D procédural. Aucun GLB requis.
+Cette version réutilise les **trois fichiers NFT originaux fournis**, renommés `escalier.fset`, `escalier.fset3`, `escalier.iset`. Ils ne sont pas recalculés : leur présence ne garantit pas que le dessin soit assez riche pour être reconnu.
 
-## Démarrage
-1. Héberger l'ensemble du dossier via HTTPS (GitHub Pages) ; ne pas ouvrir index.html directement depuis le Finder.
-2. Sur téléphone, ouvrir le lien et autoriser la caméra.
-3. Scanner **la même image** que celle utilisée pour générer les fichiers NFT (image-reference.png).
-4. Cliquer sur Réglages et activer « Afficher le tracé de calibrage » si le parcours n'est pas aligné.
-5. Ajuster décalages X/Y et échelle du parcours. Les positions sont une approximation initiale.
+## Test
+1. Ouvrir un terminal dans ce dossier : `python3 -m http.server 8000`.
+2. Ouvrir `http://localhost:8000` sur l’ordinateur, ou publier sur GitHub Pages pour tester sur smartphone (HTTPS requis).
+3. Autoriser la caméra. Montrer l'image **image-reference.png**, entière, depuis un autre écran ou imprimée, bien éclairée.
+4. Cliquer **Diagnostic** : vérifier que les trois fichiers indiquent OK. Si aucun événement `Image reconnue` n'arrive malgré cela, le problème est vraisemblablement la qualité des descripteurs ou le manque de détails de l'image.
+5. Le tracé et le personnage sont une **première approximation** à calibrer après détection. Utiliser les curseurs pour ajuster.
 
 ## Important
-- Les fichiers `escalier.fset`, `escalier.fset3`, `escalier.iset` doivent rester ensemble.
-- Le suivi NFT d'AR.js dépend de la qualité de l'image, de la lumière, du navigateur et de la version des scripts.
-- Le système suit un parcours **2,5D sur le plan de l'image**, et non des marches 3D réelles.
-- Le personnage bouge de façon procédurale, sans squelette GLB. Les montées verticales du dessin sont suivies par translation, pas par une simulation physique de marche.
-- La position exacte dans le repère NFT ne peut pas être garantie sans un test caméra sur l'appareil cible.
-- Si le parcours apparaît inversé verticalement, activer « Inverser l'axe vertical ».
-- Si le site ne charge pas, vérifier les erreurs dans la console du navigateur et que les fichiers ne renvoient pas de 404.
+Le dessin à grandes zones uniformes peut être difficile pour le suivi NFT. Si le suivi échoue, créer un **marqueur .patt avec bordure** (méthode différente), ou une nouvelle image plus riche en détails puis régénérer les trois descripteurs.

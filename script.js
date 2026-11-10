@@ -1,177 +1,22 @@
-/*
- * AR Escalier — aucun fichier GLB nécessaire.
- * IMPORTANT : les points ci-dessous sont une première approximation du dessin.
- * Le suivi NFT a son propre repère : ajuster X/Y/échelle sur le téléphone.
- * La trajectoire suit les segments blancs comme une animation 2,5D collée à l'image.
- */
-(() => {
-  'use strict';
-  const W = 1616, H = 1540;
-  // Coordonnées de l'image (origine en haut à gauche).
-  // Points horizontaux et montées successives, approximés d'après la capture.
-  const points = [
-    [70, 1275], [330, 1275], [330, 1100],
-    [605, 1100], [605, 910], [890, 910],
-    [890, 730], [1180, 730], [1180, 550], [1510, 550]
-  ];
-  const defaults = { offsetX: 0, offsetY: 0, pathScale: 1, figureScale: 1, speed: 1, flipY: false, showPath: false };
-  const config = { ...defaults };
-  const $ = id => document.getElementById(id);
-  const marker = $('image-marker');
-  const plane = $('drawing-plane');
-  const status = $('status');
-  const loading = $('loading');
-  const THREE = AFRAME.THREE;
-  let detected = false, paused = false, progress = 0, lastTime = null, elapsedDone = 0;
-  let figure, legs = [], arms = [], guide;
-  const segments = points.slice(1).map((p, i) => {
-    const a = points[i];
-    return Math.hypot(p[0] - a[0], p[1] - a[1]);
-  });
-  const total = segments.reduce((a, b) => a + b, 0);
-
-  // Converts image pixel coordinates into the AR NFT coordinate frame.
-  // In the default configuration, +Y is toward the top of the image.
-  function pointToLocal(p) {
-    const y = config.flipY ? p[1] : H - p[1];
-    return new THREE.Vector3(
-      (p[0] * config.pathScale) + config.offsetX,
-      (y * config.pathScale) + config.offsetY,
-      1.5 // Slightly above the image plane to avoid z-fighting.
-    );
-  }
-  function getPoint(distance) {
-    let remaining = Math.min(total, Math.max(0, distance));
-    for (let i = 0; i < segments.length; i++) {
-      if (remaining <= segments[i] || i === segments.length - 1) {
-        const t = segments[i] ? remaining / segments[i] : 0;
-        return {
-          point: [points[i][0] + (points[i + 1][0] - points[i][0]) * t,
-                  points[i][1] + (points[i + 1][1] - points[i][1]) * t],
-          vertical: Math.abs(points[i + 1][1] - points[i][1]) > 1
-        };
-      }
-      remaining -= segments[i];
-    }
-    return { point: points[points.length - 1], vertical: false };
-  }
-  function material() { return new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.95, metalness: 0, side: THREE.DoubleSide }); }
-  function box(parent, w, h, d, x, y, z, mat) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-    mesh.position.set(x, y, z);
-    parent.add(mesh);
-    return mesh;
-  }
-  function createFigure() {
-    const root = new THREE.Group();
-    const mat = material();
-    // Figure is oriented in the plane of the printed drawing.
-    // Unit size is in NFT/image pixel coordinates.
-    const torso = box(root, 22, 33, 9, 0, 39, 0, mat);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(12, 16, 12), mat);
-    head.position.set(0, 71, 0);
-    root.add(head);
-    for (const side of [-1, 1]) {
-      const armPivot = new THREE.Group();
-      armPivot.position.set(side * 16, 50, 0);
-      box(armPivot, 7, 27, 8, 0, -13, 0, mat);
-      root.add(armPivot); arms.push(armPivot);
-      const legPivot = new THREE.Group();
-      legPivot.position.set(side * 6, 24, 0);
-      box(legPivot, 8, 24, 8, 0, -12, 0, mat);
-      root.add(legPivot); legs.push(legPivot);
-    }
-    root.scale.setScalar(config.figureScale);
-    plane.object3D.add(root);
-    return root;
-  }
-  function rebuildGuide() {
-    if (guide) { plane.object3D.remove(guide); guide.geometry.dispose(); guide.material.dispose(); guide = null; }
-    if (!config.showPath) return;
-    const geometry = new THREE.BufferGeometry().setFromPoints(points.map(pointToLocal));
-    const mat = new THREE.LineBasicMaterial({ color: 0xffd166, linewidth: 2, depthTest: false });
-    guide = new THREE.Line(geometry, mat);
-    guide.renderOrder = 5;
-    plane.object3D.add(guide);
-  }
-  function render(time) {
-    const info = getPoint(progress);
-    figure.position.copy(pointToLocal(info.point));
-    figure.scale.setScalar(config.figureScale);
-    // Animation procédurale des bras et jambes, accélérée pendant les déplacements.
-    const moving = detected && !paused && progress < total;
-    const phase = time * 0.012 * config.speed;
-    const swing = moving ? Math.sin(phase) * 0.48 : 0;
-    legs[0].rotation.z = swing;
-    legs[1].rotation.z = -swing;
-    arms[0].rotation.z = -swing * 0.65;
-    arms[1].rotation.z = swing * 0.65;
-    // Small upward bob; on vertical steps the figure moves upward in image space.
-    figure.position.y += moving ? Math.abs(Math.sin(phase)) * 1.4 : 0;
-  }
-  function animate(time) {
-    requestAnimationFrame(animate);
-    if (lastTime === null) lastTime = time;
-    const dt = Math.min((time - lastTime) / 1000, 0.08);
-    lastTime = time;
-    if (figure && detected && !paused && progress < total) {
-      progress = Math.min(total, progress + dt * 190 * config.speed);
-      if (progress >= total) {
-        elapsedDone = time;
-        status.textContent = 'Bravo ! Le bonhomme est arrivé en haut.';
-      }
-    }
-    if (figure) render(time);
-  }
-  function syncControls() {
-    const fields = [
-      ['offset-x', 'offsetX'], ['offset-y', 'offsetY'], ['path-scale', 'pathScale'],
-      ['figure-scale', 'figureScale'], ['speed', 'speed']
-    ];
-    fields.forEach(([id, key]) => {
-      $(id).value = config[key];
-      $(id + '-value').textContent = config[key];
-      $(id).addEventListener('input', e => {
-        config[key] = Number(e.target.value);
-        $(id + '-value').textContent = config[key];
-        rebuildGuide();
-      });
-    });
-    for (const [id, key] of [['flip-y', 'flipY'], ['show-path', 'showPath']]) {
-      $(id).checked = config[key];
-      $(id).addEventListener('change', e => { config[key] = e.target.checked; rebuildGuide(); });
-    }
-  }
-  function init() {
-    figure = createFigure();
-    syncControls();
-    rebuildGuide();
-    $('restart').addEventListener('click', () => { progress = 0; paused = false; $('pause').textContent = 'Pause'; status.textContent = detected ? 'Le bonhomme monte les escaliers.' : 'Vise l’image des escaliers avec la caméra.'; });
-    $('pause').addEventListener('click', () => { paused = !paused; $('pause').textContent = paused ? 'Reprendre' : 'Pause'; });
-    $('settings-toggle').addEventListener('click', () => { $('settings').hidden = !$('settings').hidden; });
-    $('reset-settings').addEventListener('click', () => {
-      Object.assign(config, defaults);
-      for (const [id, key] of [['offset-x','offsetX'],['offset-y','offsetY'],['path-scale','pathScale'],['figure-scale','figureScale'],['speed','speed']]) {
-        $(id).value = config[key]; $(id + '-value').textContent = config[key];
-      }
-      $('flip-y').checked = false; $('show-path').checked = false;
-      rebuildGuide();
-    });
-    marker.addEventListener('markerFound', () => {
-      detected = true;
-      status.textContent = progress >= total ? 'Bravo ! Le bonhomme est arrivé en haut.' : 'Image détectée : le bonhomme monte !';
-      loading.style.display = 'none';
-    });
-    marker.addEventListener('markerLost', () => {
-      detected = false;
-      status.textContent = 'Image perdue : replace-la dans le champ de la caméra.';
-    });
-    marker.addEventListener('arjs-nft-loaded', () => { loading.style.display = 'none'; });
-    // Fallback: loading event may be emitted on the scene or not at all.
-    const scene = document.querySelector('a-scene');
-    scene.addEventListener('loaded', () => { loading.style.display = 'none'; });
-    requestAnimationFrame(animate);
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-  else init();
+(()=>{'use strict';
+const $=id=>document.getElementById(id), marker=$('marker'), plane=$('image-plane'),status=$('status'),details=$('details'),log=$('log'),THREE=AFRAME.THREE;
+const W=1616,H=1540;
+// Coordonnées en pixels mesurées sur l'image de référence.
+// Départ au bas-gauche, arrivée en haut-droite.
+const path=[[75,1280],[310,1280],[310,1110],[515,1110],[515,900],[735,900],[735,740],[975,740],[975,580],[1200,580],[1200,460],[1510,460]];
+const lens=path.slice(1).map((p,i)=>Math.hypot(p[0]-path[i][0],p[1]-path[i][1]));const length=lens.reduce((a,b)=>a+b,0);
+let detected=false,paused=false,progress=0,figure=null,legs=[],arms=[],guide=null,last=0,ready=false;
+const note=(s)=>{console.log('[AR Escalier]',s);log.textContent+=s+'\n';log.scrollTop=log.scrollHeight};
+function setStatus(s){status.textContent=s;note(s)}
+async function checkAssets(){let ok=true;for(const ext of ['fset','fset3','iset']){try{const r=await fetch('assets/escalier.'+ext,{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);note(ext+' : OK ('+(r.headers.get('content-length')||'?')+' octets)')}catch(e){ok=false;note(ext+' : ERREUR '+e.message)}}details.textContent=ok?'Fichiers NFT accessibles. Cherche le dessin entier, bien éclairé.':'Erreur de fichiers NFT : ouvrir Diagnostic.';return ok}
+function shape(parent,w,h,d,x,y,z,mat){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);parent.add(m);return m}
+function makeFigure(){const root=new THREE.Group(),mat=new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide});shape(root,22,34,9,0,38,0,mat);const head=new THREE.Mesh(new THREE.SphereGeometry(12,16,12),mat);head.position.y=70;root.add(head);for(const side of [-1,1]){const arm=new THREE.Group();arm.position.set(side*16,51,0);shape(arm,7,27,8,0,-13,0,mat);root.add(arm);arms.push(arm);const leg=new THREE.Group();leg.position.set(side*6,23,0);shape(leg,8,23,8,0,-12,0,mat);root.add(leg);legs.push(leg)}plane.object3D.add(root);return root}
+function coords(p){return new THREE.Vector3(p[0]+Number($('dx').value),H-p[1]+Number($('dy').value),3)}
+function positionAt(d){let rest=d;for(let i=0;i<lens.length;i++){if(rest<=lens[i]||i===lens.length-1){const t=Math.min(1,rest/lens[i]);return [path[i][0]+(path[i+1][0]-path[i][0])*t,path[i][1]+(path[i+1][1]-path[i][1])*t]}rest-=lens[i]}return path.at(-1)}
+function updateGuide(){if(guide){plane.object3D.remove(guide);guide.geometry.dispose();guide.material.dispose();guide=null}if(!$('guide').checked)return;guide=new THREE.Line(new THREE.BufferGeometry().setFromPoints(path.map(coords)),new THREE.LineBasicMaterial({color:0xffd54a,depthTest:false}));guide.renderOrder=100;plane.object3D.add(guide)}
+function tick(t){requestAnimationFrame(tick);const dt=last?Math.min((t-last)/1000,0.08):0;last=t;if(detected&&!paused&&progress<length){progress=Math.min(length,progress+dt*160*Number($('speed').value));if(progress===length)setStatus('Arrivé en haut !')}if(!figure)return;figure.position.copy(coords(positionAt(progress)));figure.scale.setScalar(Number($('size').value));const swing=detected&&!paused&&progress<length?Math.sin(t*0.012*Number($('speed').value))*0.5:0;legs[0].rotation.z=swing;legs[1].rotation.z=-swing;arms[0].rotation.z=-swing*0.65;arms[1].rotation.z=swing*0.65}
+function init(){figure=makeFigure();$('restart').onclick=()=>{progress=0;paused=false;$('pause').textContent='Pause';setStatus(detected?'Animation relancée':'Présente le dessin à la caméra')};$('pause').onclick=()=>{paused=!paused;$('pause').textContent=paused?'Reprendre':'Pause'};$('debug').onclick=()=>{$('panel').hidden=!$('panel').hidden};for(const id of ['dx','dy','guide'])$(id).addEventListener('input',updateGuide);
+marker.addEventListener('markerFound',()=>{detected=true;setStatus('Image reconnue ! Le bonhomme monte.')});marker.addEventListener('markerLost',()=>{detected=false;setStatus('Image perdue : recadre le dessin.')});marker.addEventListener('arjs-nft-loaded',()=>{ready=true;note('Descripteurs NFT chargés par AR.js');details.textContent='NFT chargé. Présente le dessin en entier.'});
+window.addEventListener('error',e=>note('ERREUR JS : '+e.message));window.addEventListener('unhandledrejection',e=>note('ERREUR : '+String(e.reason)));checkAssets().then(ok=>{if(ok&&!ready)setStatus('Fichiers trouvés. Attente du chargement NFT et de la détection.');else if(!ok)setStatus('Fichiers manquants : ouvre Diagnostic')});requestAnimationFrame(tick)}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();

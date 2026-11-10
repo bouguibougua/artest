@@ -1,14 +1,1 @@
-* { box-sizing: border-box; }
-html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; font-family: system-ui, -apple-system, sans-serif; }
-.loading { position: fixed; inset: 0; z-index: 20; background: #172031e8; color: white; display: grid; place-items: center; padding: 24px; text-align: center; }
-.ui { position: fixed; inset: 0; z-index: 10; pointer-events: none; color: #fff; }
-.status { position: absolute; top: max(16px, env(safe-area-inset-top)); left: 12px; right: 12px; margin: auto; max-width: 550px; background: #172031dd; border: 1px solid #ffffff35; border-radius: 12px; padding: 12px; text-align: center; font-size: 14px; }
-.controls { position: absolute; bottom: max(18px, env(safe-area-inset-bottom)); left: 12px; right: 12px; display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; pointer-events: auto; }
-button { border: 0; border-radius: 10px; background: #f3f4f6; color: #172031; font-weight: 700; padding: 11px 14px; cursor: pointer; }
-button:active { transform: scale(.97); }
-.settings { position: absolute; bottom: 76px; left: 12px; right: 12px; margin: auto; max-width: 430px; max-height: 54vh; overflow-y: auto; background: #172031ee; border: 1px solid #ffffff33; border-radius: 14px; padding: 15px; pointer-events: auto; font-size: 13px; }
-.settings[hidden] { display: none; }
-.settings p { margin: 0 0 10px; line-height: 1.4; }
-.settings label { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
-.settings input[type=range] { flex: 1; min-width: 70px; }
-.settings output { min-width: 28px; text-align: right; }
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;font-family:system-ui,sans-serif}#hud{position:fixed;z-index:10000;top:env(safe-area-inset-top,0px);left:0;right:0;padding:12px;pointer-events:none;color:white;text-shadow:0 1px 4px #000}#status,#details{background:#101a29c9;border-radius:9px;padding:8px 12px;margin-bottom:6px;font-size:14px}#details{font-size:12px}.buttons{display:flex;gap:6px;flex-wrap:wrap}button,#panel{pointer-events:auto}button{padding:9px 12px;border:0;border-radius:8px;background:#fff;color:#182032;font-weight:600}#panel{background:#142034ed;border-radius:10px;padding:12px;margin-top:8px;max-height:45vh;overflow:auto}#panel label{display:block;margin:8px 0}#panel input[type=range]{width:100%}#log{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px}a-scene{position:fixed!important;inset:0}
