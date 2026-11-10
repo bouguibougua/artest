@@ -1,1 +1,89 @@
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;font-family:system-ui,sans-serif}#hud{position:fixed;z-index:10000;top:env(safe-area-inset-top,0px);left:0;right:0;padding:10px;pointer-events:none;color:white}#status{background:#101a29d9;border-radius:9px;padding:10px 12px;margin-bottom:7px;font-size:14px;text-shadow:0 1px 3px #000}.buttons{display:flex;gap:7px;flex-wrap:wrap}button,#panel{pointer-events:auto}button{padding:10px 12px;border:0;border-radius:8px;background:#fff;color:#182032;font-weight:650}#panel{background:#142034ed;border-radius:10px;padding:12px;margin-top:8px;max-height:52vh;overflow:auto}#panel label{display:block;margin:10px 0}#panel input[type=range]{width:100%}#log{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px}a-scene{position:fixed!important;inset:0}
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  font-family: system-ui, sans-serif;
+}
+
+#hud {
+  position: fixed;
+  z-index: 10000;
+  top: env(safe-area-inset-top, 0px);
+  right: 0;
+  left: 0;
+  padding: 10px;
+  color: white;
+  pointer-events: none;
+}
+
+#status {
+  margin-bottom: 7px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: #101a29d9;
+  font-size: 14px;
+  text-shadow: 0 1px 3px #000;
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+button,
+#panel {
+  pointer-events: auto;
+}
+
+button {
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: #fff;
+  color: #182032;
+  font: inherit;
+  font-weight: 650;
+  touch-action: manipulation;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 3px solid #ffc247;
+  outline-offset: 2px;
+}
+
+#panel {
+  max-height: 52vh;
+  margin-top: 8px;
+  padding: 12px;
+  overflow: auto;
+  border-radius: 10px;
+  background: #142034ed;
+}
+
+#panel label {
+  display: block;
+  margin: 10px 0;
+}
+
+#panel input[type="range"] {
+  width: 100%;
+}
+
+#log {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  font-size: 11px;
+}
+
+a-scene {
+  position: fixed !important;
+  inset: 0;
+}

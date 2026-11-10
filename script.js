@@ -3,10 +3,11 @@
   const $ = id => document.getElementById(id);
   const THREE = AFRAME.THREE;
   const W = 1616, H = 1540; // Taille exacte de assets/image-reference.png
+  const IMAGE_PLANE_ROTATION = 0; // X vers la droite, Y vers le haut, Z vers l'avant
   const marker = $('marker');
   const scene = document.querySelector('a-scene');
   const walkerMaterial = new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide});
-  const stairMaterial = new THREE.MeshBasicMaterial({color:0xffa52f,side:THREE.DoubleSide});
+  const stairMaterial = new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide});
   // Positions en pixels dans l'image originale (origine : coin supérieur gauche).
   // Les paliers sont horizontaux, les contremarches verticales.
   const points = [
@@ -15,14 +16,21 @@
     [975,580],[1200,580],[1200,460],[1510,460]
   ];
   const route = [
-    [100,1280],[280,1280],[335,1110],[490,1110],
-    [540,900],[710,900],[760,740],[950,740],
-    [1000,580],[1170,580],[1230,460],[1480,460]
+    [390,1090],[490,1090],
+    [540,880],[710,880],[760,720],[950,720],
+    [1000,560],[1170,560],[1230,440],[1480,440]
   ];
   let sceneRoot, walker, leftLeg, rightLeg, leftArm, rightArm;
   let tracked = false, animationStarted = false, paused = false, distance = 0, lastTime = 0, finished = false;
-  const JUMP_HEIGHT = 95; // hauteur du saut entre deux marches (pixels NFT)
-  const WALKER_SCALE = 1.28 * 6;
+  let loopPause = 0;
+  const JUMP_HEIGHT = 95;
+  const JUMP_PREPARATION_END = 0.12;
+  const JUMP_LANDING_START = 0.86;
+  const LANDING_PAUSE = 0.75;
+  const FOOT_CLEARANCE = 11;
+  const STAIR_DEPTH = 80;
+  const STAIR_DEPTH_CENTER = STAIR_DEPTH/2;
+  const WALKER_SCALE = 7.2;
   const lengths = route.slice(1).map((p,i)=>Math.hypot(p[0]-route[i][0],p[1]-route[i][1]));
   const total = lengths.reduce((a,b)=>a+b,0);
   function log(msg){ $('status').textContent=msg; console.log('[AR escalier]',msg); $('log').textContent += msg+'\n'; }
@@ -39,16 +47,17 @@
     for(let i=0;i<points.length-1;i++){
       const a=points[i], b=points[i+1];
       const x=(a[0]+b[0])/2, y=H-(a[1]+b[1])/2;
-      if(a[1]===b[1]) addBox(stairs,Math.abs(b[0]-a[0])+14,16,24,x,y,3,stairMaterial);
-      else addBox(stairs,16,Math.abs(b[1]-a[1])+14,24,x,y,3,stairMaterial);
+      if(a[1]===b[1]) addBox(stairs,Math.abs(b[0]-a[0])+14,16,STAIR_DEPTH,x,y,STAIR_DEPTH_CENTER,stairMaterial);
+      else addBox(stairs,16,Math.abs(b[1]-a[1])+14,STAIR_DEPTH,x,y,STAIR_DEPTH_CENTER,stairMaterial);
     }
     return stairs;
   }
   function createWalker(parent){
     // Dessiné dans le plan XY du NFT, devant les marches (+Z).
     const root = new THREE.Group(); parent.add(root);
-    addBall(root,19,0,101,0); // tête blanche
-    addBox(root,19,55,17,0,64,0); // torse blanc
+    addBall(root,11,0,108,0); // tête blanche
+    addBall(root,3,10,108,0); // regarde vers la droite de l'image
+    addBox(root,40,49,17,0,66,0); // torse blanc
     for(const side of [-1,1]){
       const arm = new THREE.Group(); arm.position.set(side*15,83,0); root.add(arm);
       addBox(arm,9,42,10,0,-21,0);
@@ -66,14 +75,53 @@
       const len=lengths[i];
       if(remaining<=len || i===lengths.length-1){
         const t=len?remaining/len:0;
-        return {x:route[i][0]+(route[i+1][0]-route[i][0])*t,
-                y:route[i][1]+(route[i+1][1]-route[i][1])*t,
-                jump:i%2===1, t};
+        const start=route[i], end=route[i+1];
+        const jump=end[1]<start[1];
+        if(!jump){
+          return {
+            x:start[0]+(end[0]-start[0])*t,
+            y:start[1]+(end[1]-start[1])*t,
+            phase:'walk',
+            t
+          };
+        }
+        if(t<JUMP_PREPARATION_END){
+          return {
+            x:start[0],
+            y:start[1],
+            phase:'prepare',
+            lift:0,
+            crouch:12*Math.sin(Math.PI*t/JUMP_PREPARATION_END),
+            t
+          };
+        }
+        if(t<JUMP_LANDING_START){
+          const flight=(t-JUMP_PREPARATION_END)/(JUMP_LANDING_START-JUMP_PREPARATION_END);
+          const eased=flight*flight*(3-2*flight);
+          const phase=flight<0.08?'impulse':flight<0.5?'ascent':'descent';
+          return {
+            x:start[0]+(end[0]-start[0])*eased,
+            y:start[1]+(end[1]-start[1])*eased,
+            phase,
+            lift:JUMP_HEIGHT*Math.sin(Math.PI*flight),
+            crouch:0,
+            t
+          };
+        }
+        const landing=(t-JUMP_LANDING_START)/(1-JUMP_LANDING_START);
+        return {
+          x:end[0],
+          y:end[1],
+          phase:'land',
+          lift:10*Math.sin(Math.PI*landing),
+          crouch:0,
+          t
+        };
       }
       remaining-=len;
     }
     const last=route[route.length-1];
-    return {x:last[0],y:last[1],jump:false,t:1};
+    return {x:last[0],y:last[1],phase:'walk',t:1};
   }
   function render(now){
     requestAnimationFrame(render);
@@ -95,50 +143,75 @@
       sceneRoot.position.set(Number($('dx').value),Number($('dy').value),0);
       sceneRoot.scale.setScalar(scale);
     }
-    const walking=active && !paused && !finished;
+    const walking=(tracked || preview) && !paused && !finished;
     if(walking){
       distance+=dt*170*Number($('speed').value);
       if(distance>=total){
-        if($('loop').checked)distance=0;
-        else {distance=total;finished=true;log('Arrivé en haut des escaliers !');}
+        distance=total;
+        finished=true;
+        loopPause=$('loop').checked?LANDING_PAUSE:0;
+        if(!$('loop').checked)log('Arrivé en haut des escaliers !');
+      }
+    }else if((tracked || preview) && !paused && finished && loopPause>0){
+      loopPause=Math.max(0,loopPause-dt);
+      if(loopPause===0){
+        distance=0;
+        finished=false;
       }
     }
     const p=pathAt(distance);
-    // L'origine du bonhomme correspond à ses pieds.
-    // Saut en arc sur chaque transition vers la marche suivante.
-    // La parabole vaut 0 au départ et à l’arrivée : atterrissage net sur le palier.
-    const jumpOffset=p.jump ? JUMP_HEIGHT*4*p.t*(1-p.t) : 0;
-    walker.position.set(p.x,H-p.y+8+jumpOffset,65);
+    walker.position.set(p.x,H-p.y+FOOT_CLEARANCE+(p.lift||0)-(p.crouch||0),STAIR_DEPTH_CENTER+22);
     const phase=distance/22;
-    const swing=walking?(p.jump ? 0.25 : Math.sin(phase)*0.48):0;
-    // Rotation Z : les bras/jambes bougent dans le plan de l'image.
-    leftLeg.rotation.z=swing;rightLeg.rotation.z=-swing;
-    leftArm.rotation.z=-swing*0.8;rightArm.rotation.z=swing*0.8;
-    if(walking && !p.jump) walker.position.y+=Math.abs(Math.sin(phase))*3;
-    // Pendant le saut, les jambes se replient légèrement.
-    if(p.jump && walking){
-      leftLeg.rotation.z=-0.38;rightLeg.rotation.z=0.38;
+    if(walking && p.phase==='prepare'){
+      leftLeg.rotation.z=-0.3;rightLeg.rotation.z=0.3;
       leftArm.rotation.z=0.55;rightArm.rotation.z=-0.55;
+    }else if(walking && p.phase==='impulse'){
+      leftLeg.rotation.z=0.28;rightLeg.rotation.z=-0.28;
+      leftArm.rotation.z=-0.72;rightArm.rotation.z=0.72;
+    }else if(walking && p.phase==='ascent'){
+      const flight=(p.t-JUMP_PREPARATION_END)/(JUMP_LANDING_START-JUMP_PREPARATION_END);
+      const tuck=Math.sin(Math.PI*flight);
+      leftLeg.rotation.z=-0.48*tuck;rightLeg.rotation.z=0.48*tuck;
+      leftArm.rotation.z=0.6;rightArm.rotation.z=-0.6;
+    }else if(walking && p.phase==='descent'){
+      leftLeg.rotation.z=0.25;rightLeg.rotation.z=-0.25;
+      leftArm.rotation.z=0.25;rightArm.rotation.z=-0.25;
+    }else if(walking && p.phase==='land'){
+      const landing=(p.t-JUMP_LANDING_START)/(1-JUMP_LANDING_START);
+      const settle=1-landing;
+      leftLeg.rotation.z=-0.12*settle;rightLeg.rotation.z=0.12*settle;
+      leftArm.rotation.z=0.18*settle;rightArm.rotation.z=-0.18*settle;
+    }else{
+      const swing=walking?Math.sin(phase)*0.48:0;
+      leftLeg.rotation.z=swing;rightLeg.rotation.z=-swing;
+      leftArm.rotation.z=-swing*0.8;rightArm.rotation.z=swing*0.8;
     }
   }
   function init(){
     sceneRoot=new THREE.Group();marker.object3D.add(sceneRoot);
+    sceneRoot.rotation.set(0,0,IMAGE_PLANE_ROTATION);
     createStaircase(sceneRoot);walker=createWalker(sceneRoot);
     sceneRoot.visible=false;
-    $('restart').onclick=()=>{distance=0;finished=false;paused=false;$('pause').textContent='Pause';log('Animation relancée');};
+    $('restart').onclick=()=>{
+      distance=0;finished=false;loopPause=0;paused=false;
+      $('pause').textContent='Pause';
+      log('Animation relancée');
+    };
     $('pause').onclick=()=>{paused=!paused;$('pause').textContent=paused?'Reprendre':'Pause';};
     $('animation').onclick=()=>{
       const preview=$('preview');
       preview.checked=!preview.checked;
       if(preview.checked){
-        distance=0;finished=false;paused=false;
+        distance=0;finished=false;loopPause=0;paused=false;
         scene.object3D.add(sceneRoot);
         $('pause').textContent='Pause';
         $('animation').textContent='Arrêter animation';
+        $('animation').setAttribute('aria-pressed','true');
         log('Aperçu de l’animation lancé');
       }else{
         marker.object3D.add(sceneRoot);
         $('animation').textContent='Animation';
+        $('animation').setAttribute('aria-pressed','false');
         log(tracked?'Aperçu arrêté : suivi AR actif':'Aperçu de l’animation arrêté');
       }
     };
@@ -146,6 +219,7 @@
       const preview=$('preview').checked;
       (preview?scene.object3D:marker.object3D).add(sceneRoot);
       $('animation').textContent=preview?'Arrêter animation':'Animation';
+      $('animation').setAttribute('aria-pressed',String(preview));
     });
     $('debug').onclick=()=>{$('panel').hidden=!$('panel').hidden;};
     marker.addEventListener('markerFound',()=>{
@@ -153,22 +227,23 @@
       tracked=true;
       if(firstDetection){
         animationStarted=true;
-        distance=0;
-        finished=false;
-        paused=false;
+        distance=0;finished=false;loopPause=0;paused=false;
         $('pause').textContent='Pause';
       }
       if($('preview').checked){
         $('preview').checked=false;
         marker.object3D.add(sceneRoot);
         $('animation').textContent='Animation';
+        $('animation').setAttribute('aria-pressed','false');
       }
-      log('Image détectée : escalier et personnage visibles, animation lancée');
+      log(firstDetection
+        ? 'Image détectée : animation lancée dans le sens de l’escalier'
+        : 'Image retrouvée : animation reprise');
     });
     marker.addEventListener('markerLost',()=>{
       tracked=false;
       log(animationStarted
-        ? 'Image momentanément perdue : animation continue'
+        ? 'Image perdue : animation en pause, en attente de reprise'
         : 'Image perdue : en attente de détection');
     });
     marker.addEventListener('arjs-nft-loaded',()=>log('NFT chargé : filme l’image des escaliers'));
